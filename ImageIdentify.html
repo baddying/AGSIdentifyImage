@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>index.html</title>
+
+  <meta http-equiv="keywords" content="keyword1,keyword2,keyword3">
+  <meta http-equiv="description" content="this is my page">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.16/esri/themes/light/main.css">
+  <script src="https://js.arcgis.com/4.16/"></script>
+
+  <!--<link rel="stylesheet" type="text/css" href="./styles.css">-->
+  <style>
+    .MapClass {
+      width: 100%;
+      height: 750px;
+      border: 1px solid #000;
+    }
+  </style>
+  <script>
+    require(["esri/Map",
+      "esri/views/MapView",
+      "esri/layers/ImageryLayer",
+      "esri/geometry/Point",
+      "dojo/dom",
+      "esri/views/draw/Draw",
+      "esri/tasks/ImageServiceIdentifyTask",
+      "esri/tasks/support/ImageServiceIdentifyParameters",
+      "esri/Color",
+      "esri/symbols/SimpleLineSymbol",
+      "esri/Graphic",
+      "esri/geometry/geometryEngine",
+      "esri/symbols/SimpleMarkerSymbol",
+      "esri/symbols/SimpleFillSymbol",
+      "esri/layers/support/MosaicRule"],
+      function (Map, MapView, ArcGISImageServiceLayer, Point, dom, Draw,
+        ImageServiceIdentifyTask, ImageServiceIdentifyParameters, Color, SimpleLineSymbol,
+        Graphic, geometryEngine, SimpleMarkerSymbol, SimpleFillSymbol, MosaicRule) {
+
+        var map = new Map({
+          basemap: "hybrid"
+        });
+
+        // Create a MapView instance (for 2D viewing) and set its map property to
+        // the map instance we just created
+        var view = new MapView({
+          map: map,
+          container: "mapDiv",
+          zoom: 6,
+          center: [108.06, 23.34]
+        });
+
+        //用于绘制图形
+        var draw = new Draw({
+          view: view
+        });
+        //图形渲染
+        var lineSymbol = new SimpleLineSymbol(SimpleLineSymbol.STYLE_DASH, new Color([255, 0, 0]), 3);//线
+        var marker = new SimpleMarkerSymbol(SimpleMarkerSymbol.STYLE_CIRCLE, 10, lineSymbol, new Color([255, 0, 0]));//点
+        var fill = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, lineSymbol, new Color([255, 0, 0]));//面
+
+
+        var demImgSerUrl = "http://39.99.142.44:6080/arcgis/rest/services/Terrain/dem/ImageServer";//dem
+        var pjwImgSerUrl = "http://39.99.142.44:6080/arcgis/rest/services/Meteo/gxypjw/ImageServer"; //月平均温度
+        var jslImgSerUrl = "http://39.99.142.44:6080/arcgis/rest/services/Meteo/gxyjsl/ImageServer";//月降水量
+        //注意这里是影像服务
+        // var layer = new ArcGISImageServiceLayer(imgSerUrl);
+        // map.add(layer);//不需要加入map就可以使用影像服务
+
+
+        //创建影像分析参数对象
+        var params = new ImageServiceIdentifyParameters();
+
+
+
+        //给绘制范围按钮绑定事件     
+        document.getElementById("drawp").onclick = function () {
+          //先清除所有图形
+          view.graphics.removeAll();
+
+          // creates and returns an instance of PolyLineDrawAction
+          const action = draw.create("polygon");
+
+          // PolygonDrawAction.vertex-add
+          // Fires when user clicks, or presses the "F" key.
+          // Can also be triggered when the "R" key is pressed to redo.
+          action.on("vertex-add", function (evt) {
+            createPolygonGraphic(evt.vertices);
+          });
+
+          // PolygonDrawAction.vertex-remove
+          // Fires when the "Z" key is pressed to undo the last added vertex
+          action.on("vertex-remove", function (evt) {
+            createPolygonGraphic(evt.vertices);
+          });
+
+          // Fires when the pointer moves over the view
+          action.on("cursor-update", function (evt) {
+            createPolygonGraphic(evt.vertices);
+          });
+
+          // Add a graphic representing the completed polygon
+          // when user double-clicks on the view or presses the "C" key
+          action.on("draw-complete", function (evt) {
+            var gra = createPolygonGraphic(evt.vertices);
+
+            //加入查询地理参数！！！！
+            params.geometry = gra.geometry;
+          });
+
+        };
+
+
+        function createPolygonGraphic(vertices) {
+          view.graphics.removeAll();
+          var polygon = {
+            type: "polygon", // autocasts as Polygon
+            rings: vertices,
+            spatialReference: view.spatialReference
+          };
+
+          var graphic = new Graphic({
+            geometry: polygon,
+            symbol: {
+              type: "simple-fill", // autocasts as SimpleFillSymbol
+              color: "purple",
+              style: "solid",
+              outline: {  // autocasts as SimpleLineSymbol
+                color: "white",
+                width: 1
+              }
+            }
+          });
+          view.graphics.add(graphic);
+
+          return graphic; //绘制函数返回几何对象
+        }
+
+
+        document.getElementById("btn").onclick = function () {
+          // var mosaicRule = new MosaicRule();
+          // mosaicRule.ascending = false;
+          // mosaicRule.method = MosaicRule.METHOD_CENTER;
+          // params.mosaicRule = mosaicRule;
+          // params.pixelSizeX = layer.pixelSizeX;
+          // params.pixelSizeY = layer.pixelSizeY;
+          // params.maxItemCount = 1;
+          // params.returnCatalogItems = false;
+          //params.raster = layer;
+          // params.renderingRule = layer.renderingRule;
+          //params.viewId = MapView;
+          // console.log(params);
+          //执行查询返回影像服务的栅格值
+          //创建影像分析对象
+          var demTask = new ImageServiceIdentifyTask(demImgSerUrl);
+          var pjwTask = new ImageServiceIdentifyTask(pjwImgSerUrl);
+          var jslTask = new ImageServiceIdentifyTask(jslImgSerUrl);
+
+          demTask.execute(params).then(c => {
+
+            alert("高程:" + c.value / 10);//除以10得到真实值
+          });
+
+
+          pjwTask.execute(params).then(c => {
+            yjw = c.value.split(",");
+            var i = 0;
+            yjw.forEach(element => {
+              yjw[i] = i + 1 + "月:" + element / 10;//除以10得到真实值
+              i++;
+            });
+            alert("月均温:" + yjw.toString());
+          });
+
+
+          jslTask.execute(params).then(c => {
+            jsl = c.value.split(",");
+            var i = 0;
+            jsl.forEach(element => {
+              jsl[i] = i + 1 + "月:" + element / 10;//除以10得到真实值
+              i++;
+            });
+            alert("月降水量:" + jsl.toString());
+          });
+
+
+        };
+
+      });
+  </script>
+</head>
+
+<body>
+  <button id="drawp">绘制范围</button>
+  <button id="btn">查询</button>
+  <div id="mapDiv" class="MapClass"></div>
+ 
+</body>
+
+</html>
